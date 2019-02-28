@@ -28,6 +28,8 @@ Usage of ./slapper:
     	Requests timeout (default 30s)
   -workers uint
     	Number of workers (default 8)
+  -proxy string
+    	proxy to use (example: http://proxy.foobar.com:3128)
 
 ```
 
