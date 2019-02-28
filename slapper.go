@@ -17,6 +17,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"net/url"
 	"sync/atomic"
 	"time"
 
@@ -215,14 +216,31 @@ func (trgt *targeter) nextRequest() (*http.Request, error) {
 	return req, err
 }
 
-func attack(trgt *targeter, timeout time.Duration, ch <-chan time.Time, quit <-chan struct{}) {
-	tr := &http.Transport{
-		DisableKeepAlives:   false,
-		DisableCompression:  true,
-		MaxIdleConnsPerHost: 100,
-		IdleConnTimeout:     30 * time.Second,
-		TLSClientConfig:     &tls.Config{InsecureSkipVerify: true},
-	}
+func attack(trgt *targeter, timeout time.Duration, ch <-chan time.Time, proxyStr *string, quit <-chan struct{}) {
+		
+	var tr *http.Transport = nil
+	if proxyStr != nil {
+		proxyURL, err := url.Parse(*proxyStr)
+		if err != nil {
+			log.Println(err)
+		}				
+		tr = &http.Transport{
+			Proxy: http.ProxyURL(proxyURL),
+			DisableKeepAlives:   false,
+			DisableCompression:  true,
+			MaxIdleConnsPerHost: 100,
+			IdleConnTimeout:     30 * time.Second,
+			TLSClientConfig:     &tls.Config{InsecureSkipVerify: true},
+		}
+	} else {		
+		tr = &http.Transport{			
+			DisableKeepAlives:   false,
+			DisableCompression:  true,
+			MaxIdleConnsPerHost: 100,
+			IdleConnTimeout:     30 * time.Second,
+			TLSClientConfig:     &tls.Config{InsecureSkipVerify: true},
+		}	
+	}	
 
 	client := &http.Client{
 		Transport: tr,
@@ -508,10 +526,11 @@ func (i *arrayFlags) Set(value string) error {
 
 var headerFlags arrayFlags
 
-func main() {
+func main() {                
 	workers := flag.Uint("workers", 8, "Number of workers")
 	timeout := flag.Duration("timeout", 30*time.Second, "Requests timeout")
 	targets := flag.String("targets", "", "Targets file")
+	proxy := flag.String("proxy", os.Getenv("http_proxy"), "http_proxy")	
 	base64body := flag.Bool("base64body", false, "Bodies in targets file are base64-encoded")
 	rate := flag.Uint64("rate", 50, "Requests per second")
 	miY := flag.Duration("minY", 0, "min on Y axe (default 0ms)")
@@ -568,7 +587,7 @@ func main() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			attack(trgt, *timeout, ticker, quit)
+			attack(trgt, *timeout, ticker, proxy, quit)
 		}()
 	}
 
